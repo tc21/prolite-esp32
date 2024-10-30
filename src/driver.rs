@@ -11,37 +11,37 @@ use esp_idf_svc::{
 use crate::protocol;
 
 pub fn display_screen(
-    screen: &protocol::drive::Screen,
+    buffer: &protocol::drive::ScreenBuffer,
     control_pins: &mut ControlPins,
 ) -> Result<(), EspError> {
     control_pins.clk.set_low()?;
-    thread::sleep(CLOCK_CYCLE_DELAY);
+    thread::sleep(CLOCK_CYCLE_INTERVAL);
 
     for row in 0..6 {
-        let (row_0_level, row_1_level, row_2_level) = ROW_CONTROL[row];
+        let (row_0_level, row_1_level, row_2_level) = CONTROL_SIGNALS_BY_ROW[row];
 
         control_pins.row_0.set_level(row_0_level)?;
         control_pins.row_1.set_level(row_1_level)?;
         control_pins.row_2.set_level(row_2_level)?;
 
         for col in 0..80 {
-            let pixel = screen[row][80 - col - 1];
+            let pixel = buffer[row][80 - col - 1];
             control_pins.r.set_level(pixel.red.to_gpio_level())?;
             control_pins.g.set_level(pixel.green.to_gpio_level())?;
 
             control_pins.clk.set_high()?;
-            thread::sleep(CLOCK_CYCLE_DELAY);
+            thread::sleep(CLOCK_CYCLE_INTERVAL);
             control_pins.clk.set_low()?;
-            thread::sleep(CLOCK_CYCLE_DELAY);
+            thread::sleep(CLOCK_CYCLE_INTERVAL);
         }
     }
 
     Ok(())
 }
 
-const CLOCK_CYCLE_DELAY: Duration = Duration::from_nanos(200);
+const CLOCK_CYCLE_INTERVAL: Duration = Duration::from_nanos(200);
 
-const ROW_CONTROL: [(Level, Level, Level); 7] = [
+const CONTROL_SIGNALS_BY_ROW: [(Level, Level, Level); 7] = [
     (Level::High, Level::High, Level::High),
     (Level::High, Level::High, Level::Low),
     (Level::High, Level::Low, Level::High),

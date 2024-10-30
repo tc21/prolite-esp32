@@ -12,14 +12,14 @@ use esp_idf_svc::{
     sys::EspError,
 };
 use log::info;
-use protocol::{drive::Screen, Command, CommandInAction, CommandState, ScreenState};
+use protocol::{drive::ScreenBuffer, Command, ContentState, CurrentContent, ScreenBufferState};
 
 mod config;
-mod control;
-mod display;
+mod controller;
 mod driver;
 mod network;
 mod protocol;
+mod renderer;
 
 fn main() {
     // It is necessary to call this function once. Otherwise some patches to the runtime
@@ -33,7 +33,7 @@ fn main() {
 
     let peripherals = hal::prelude::Peripherals::take().unwrap();
     let (command_tx, command_rx) = mpsc::channel();
-    let (screen_tx, screen_rx) = mpsc::channel();
+    let (screen_buffer_tx, screen_buffer_rx) = mpsc::channel();
 
     let (continuation_tx, continuation_rx) = mpsc::channel();
 
@@ -45,9 +45,9 @@ fn main() {
     // numerous unwraps occur here:
     // if the initialize process fails, simply reboot and try again
 
-    // networking is heavy
     thread::Builder::new()
-        .stack_size(1024 * 4)
+        .name("networking".to_owned())
+        .stack_size(THREAD_STACK_SIZE)
         .spawn(move || {
             init_networking_thread(wifi_config, peripherals.modem, command_tx, continuation_tx)
                 .unwrap();
@@ -69,21 +69,24 @@ fn main() {
     };
 
     thread::Builder::new()
-        .stack_size(1024 * 96)
+        .name("driver".to_owned())
+        .stack_size(THREAD_STACK_SIZE)
         .spawn(move || {
-            init_driver_thread(screen_rx, control_pins);
+            init_driver_thread(screen_buffer_rx, control_pins);
         })
         .unwrap();
 
     thread::Builder::new()
-        .stack_size(1024 * 8)
+        .name("renderer".to_owned())
+        .stack_size(THREAD_STACK_SIZE)
         .spawn(move || {
-            init_display_thread(command_rx, screen_tx);
+            init_renderer_thread(command_rx, screen_buffer_tx);
         })
         .unwrap();
 }
 
 const MAX_RETRY_ATTEMPTS: usize = 3;
+const THREAD_STACK_SIZE: usize = 16 * 1024;
 
 fn init_networking_thread(
     config: WifiConfig,
@@ -92,7 +95,7 @@ fn init_networking_thread(
     continuation_tx: Sender<i32>,
 ) -> Result<(), EspError> {
     let mut connection = network::establish_wifi_connection(config.ssid, config.password, modem)?;
-    let mut _server = control::establish_control_server(command_tx)?;
+    let mut _server = controller::establish_control_server(command_tx)?;
 
     send(&continuation_tx, 1);
 
@@ -110,12 +113,15 @@ fn init_networking_thread(
     }
 }
 
-const SCREEN_UPDATE_DELAY: Duration = Duration::from_micros(200);
-const DISPLAY_PROCESSING_RATE: Duration = Duration::from_millis(20);
+const SCREEN_UPDATE_DELAY_MIN: Duration = Duration::from_micros(200);
+const RENDER_FRAME_DELAY: Duration = Duration::from_millis(20);
 
-fn init_display_thread(command_rx: Receiver<Command>, screen_tx: Sender<Box<Screen>>) {
-    let mut current_command = None;
-    let mut command_queue = VecDeque::new();
+fn init_renderer_thread(
+    command_rx: Receiver<Command>,
+    screen_buffer_tx: Sender<Box<ScreenBuffer>>,
+) {
+    let mut current_content = None;
+    let mut content_queue = VecDeque::new();
     let mut now = Instant::now();
 
     // Loop:
@@ -124,72 +130,75 @@ fn init_display_thread(command_rx: Receiver<Command>, screen_tx: Sender<Box<Scre
     // 3. Sleep until next frame
     loop {
         if let Some(command) = try_recv(&command_rx) {
-            info!("[display] received new command {:?}", &command);
+            info!("[render] received new command {:?}", &command);
 
             match command {
-                Command::DisplayInQueue(command) => command_queue.push_back(command),
-                Command::DisplayNow(command) => {
-                    command_queue.clear();
-                    current_command = Some(CommandInAction {
-                        command,
+                Command::AddToQueue(command) => content_queue.push_back(command),
+                Command::ShowNow(command) => {
+                    content_queue.clear();
+                    current_content = Some(CurrentContent {
+                        content: command,
                         start_time: now,
                     });
                 }
                 Command::Clear => {
-                    command_queue.clear();
-                    current_command = None;
+                    content_queue.clear();
+                    current_content = None;
                 }
             }
         }
 
-        if current_command.is_none() {
-            if let Some(next_command) = command_queue.pop_front() {
-                info!("[display] starting render of command {:?}", &next_command);
-                current_command = Some(CommandInAction {
-                    command: next_command,
+        if current_content.is_none() {
+            if let Some(next_command) = content_queue.pop_front() {
+                info!("[render] starting render of command {:?}", &next_command);
+                current_content = Some(CurrentContent {
+                    content: next_command,
                     start_time: now,
                 })
             }
         }
 
-        if let Some(command) = current_command.as_ref() {
-            let render = display::render(&command.command, command.start_time, now);
+        if let Some(command) = current_content.as_ref() {
+            let render = renderer::render(&command.content, command.start_time, now);
 
-            if render.command_state == CommandState::Finished {
-                info!("[display] finished rendering previous command");
-                current_command = None
+            if render.command_state == ContentState::Complete {
+                info!("[render] finished rendering previous command");
+                current_content = None
             }
 
-            if render.screen_state != ScreenState::Unchanged {
-                send(&screen_tx, render.screen);
+            if render.buffer_state != ScreenBufferState::NotUpdated {
+                send(&screen_buffer_tx, render.buffer);
             }
         }
 
         let elapsed = now.elapsed();
 
-        if elapsed < DISPLAY_PROCESSING_RATE {
-            thread::sleep(DISPLAY_PROCESSING_RATE - elapsed);
-            now = now.checked_add(DISPLAY_PROCESSING_RATE).unwrap();
+        if elapsed < RENDER_FRAME_DELAY {
+            thread::sleep(RENDER_FRAME_DELAY - elapsed);
+            now = now.checked_add(RENDER_FRAME_DELAY).unwrap();
         } else {
             now = Instant::now();
         }
     }
 }
 
-fn init_driver_thread(screen_rx: Receiver<Box<Screen>>, mut control_pins: ControlPins) {
-    let mut screen = Box::new(protocol::drive::Screen::new());
+fn init_driver_thread(
+    screen_buffer_rx: Receiver<Box<ScreenBuffer>>,
+    mut control_pins: ControlPins,
+) {
+    let mut buffer = Box::new(protocol::drive::ScreenBuffer::new());
 
     loop {
-        if let Some(new_screen) = try_recv(&screen_rx) {
-            screen = new_screen
+        if let Some(new_buffer) = try_recv(&screen_buffer_rx) {
+            buffer = new_buffer
         }
 
-        match driver::display_screen(&screen, &mut control_pins) {
+        match driver::display_screen(&buffer, &mut control_pins) {
             Ok(_) => { /* do nothing */ }
             Err(e) => info!("failed to drive screen: {:?}", e),
         };
 
-        thread::sleep(SCREEN_UPDATE_DELAY);
+        thread::sleep(SCREEN_UPDATE_DELAY_MIN);
     }
 }
 

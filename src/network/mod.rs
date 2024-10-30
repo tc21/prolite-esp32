@@ -12,7 +12,7 @@ pub fn establish_wifi_connection(
     modem: impl Peripheral<P = Modem> + 'static,
 ) -> Result<EspWifi<'static>, EspError> {
     unsafe {
-        // "Call nvs_flash_init before starting WiFi/BT"
+        // "otherwise you get this warning: Call nvs_flash_init before starting WiFi/BT"
         nvs_flash_init();
     }
 

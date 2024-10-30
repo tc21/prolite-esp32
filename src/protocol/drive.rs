@@ -35,15 +35,15 @@ impl Level {
 }
 
 #[derive(Debug)]
-pub struct Screen(pub [[Pixel; 80]; 7]);
+pub struct ScreenBuffer(pub [[Pixel; 80]; 7]);
 
-impl Screen {
+impl ScreenBuffer {
     pub fn new() -> Self {
         Self([[Pixel::default(); 80]; 7])
     }
 }
 
-impl Deref for Screen {
+impl Deref for ScreenBuffer {
     type Target = [[Pixel; 80]; 7];
 
     fn deref(&self) -> &Self::Target {
@@ -51,7 +51,7 @@ impl Deref for Screen {
     }
 }
 
-impl DerefMut for Screen {
+impl DerefMut for ScreenBuffer {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }

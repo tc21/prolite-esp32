@@ -1,31 +1,31 @@
 use std::time::{Duration, Instant};
 
-use super::drive::Screen;
+use super::drive::ScreenBuffer;
 
 #[derive(Debug)]
 pub enum Command {
-    DisplayInQueue(DisplayCommand),
-    DisplayNow(DisplayCommand),
+    AddToQueue(Content),
+    ShowNow(Content),
     Clear,
 }
 
 #[derive(Debug)]
-pub struct DisplayCommand {
+pub struct Content {
     pub text: String,
     pub animation: Animation,
-    pub duration: DisplayDuration,
+    pub duration: ContentDuration,
 }
 
 #[derive(Debug)]
-pub struct CommandInAction {
-    pub command: DisplayCommand,
+pub struct CurrentContent {
+    pub content: Content,
     pub start_time: Instant,
 }
 
-impl CommandInAction {
-    pub fn new(command: DisplayCommand) -> Self {
+impl CurrentContent {
+    pub fn new(content: Content) -> Self {
         Self {
-            command,
+            content,
             start_time: Instant::now(),
         }
     }
@@ -33,33 +33,33 @@ impl CommandInAction {
 
 #[derive(Debug)]
 pub struct RenderResult {
-    pub screen: Box<Screen>,
-    pub command_state: CommandState,
-    pub screen_state: ScreenState,
+    pub buffer: Box<ScreenBuffer>,
+    pub command_state: ContentState,
+    pub buffer_state: ScreenBufferState,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CommandState {
-    InAction,
-    Finished,
+pub enum ContentState {
+    Incomplete,
+    Complete,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ScreenState {
+pub enum ScreenBufferState {
     Updated,
-    Unchanged,
+    NotUpdated,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Animation {
     None,
-    SlideIn(Direction, Speed),
-    SlideOut(Direction, Speed),
-    SlideThrough(Direction, Speed),
+    SlideIn(AnimationDirection, AnimationSpeed),
+    SlideOut(AnimationDirection, AnimationSpeed),
+    SlideThrough(AnimationDirection, AnimationSpeed),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Direction {
+pub enum AnimationDirection {
     TopToBottom,
     BottomToTop,
     LeftToRight,
@@ -67,7 +67,7 @@ pub enum Direction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Speed {
+pub enum AnimationSpeed {
     // Clamps to duration if duration != UntilAnimationEnd
     // otherwise equivalent to TODO(temporarily set at 80dps)
     Natural,
@@ -75,7 +75,7 @@ pub enum Speed {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DisplayDuration {
+pub enum ContentDuration {
     Finite(Duration),
     UntilAnimationEnd,
     Forever,
