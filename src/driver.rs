@@ -39,23 +39,23 @@ pub fn display_screen(
     Ok(())
 }
 
-const CLOCK_CYCLE_DELAY: Duration = Duration::from_nanos(64);
+const CLOCK_CYCLE_DELAY: Duration = Duration::from_nanos(200);
 
 const ROW_CONTROL: [(Level, Level, Level); 7] = [
     (Level::High, Level::High, Level::High),
     (Level::High, Level::High, Level::Low),
-    (Level::High, Level::High, Level::Low),
-    (Level::High, Level::High, Level::Low),
-    (Level::High, Level::High, Level::Low),
-    (Level::High, Level::High, Level::Low),
-    (Level::High, Level::High, Level::Low),
+    (Level::High, Level::Low, Level::High),
+    (Level::High, Level::Low, Level::Low),
+    (Level::Low, Level::High, Level::High),
+    (Level::Low, Level::High, Level::Low),
+    (Level::Low, Level::Low, Level::High),
 ];
 
 pub struct ControlPins {
     // I haven't been able to figure out how to configure these pins dynamically
-    pub r: PinDriver<'static, hal::gpio::Gpio2, hal::gpio::Output>,
-    pub g: PinDriver<'static, hal::gpio::Gpio4, hal::gpio::Output>,
-    pub row_0: PinDriver<'static, hal::gpio::Gpio15, hal::gpio::Output>,
+    pub r: PinDriver<'static, hal::gpio::Gpio15, hal::gpio::Output>,
+    pub g: PinDriver<'static, hal::gpio::Gpio2, hal::gpio::Output>,
+    pub row_0: PinDriver<'static, hal::gpio::Gpio4, hal::gpio::Output>,
     pub row_1: PinDriver<'static, hal::gpio::Gpio16, hal::gpio::Output>,
     pub row_2: PinDriver<'static, hal::gpio::Gpio17, hal::gpio::Output>,
     pub clk: PinDriver<'static, hal::gpio::Gpio18, hal::gpio::Output>,

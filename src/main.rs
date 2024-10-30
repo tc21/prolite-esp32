@@ -35,37 +35,50 @@ fn main() {
     let (command_tx, command_rx) = mpsc::channel();
     let (screen_tx, screen_rx) = mpsc::channel();
 
-    // numerous unwraps occur here:
-    // if the initialize process fails, simply reboot and try again
-    let control_pins = ControlPins {
-        r: PinDriver::output(peripherals.pins.gpio2).unwrap(),
-        g: PinDriver::output(peripherals.pins.gpio4).unwrap(),
-
-        row_0: PinDriver::output(peripherals.pins.gpio15).unwrap(),
-        row_1: PinDriver::output(peripherals.pins.gpio16).unwrap(),
-        row_2: PinDriver::output(peripherals.pins.gpio17).unwrap(),
-
-        clk: PinDriver::output(peripherals.pins.gpio18).unwrap(),
-    };
-
-    thread::spawn(move || {
-        init_driver_thread(screen_rx, control_pins);
-    });
-
-    thread::spawn(move || {
-        init_display_thread(command_rx, screen_tx);
-    });
+    let (continuation_tx, continuation_rx) = mpsc::channel();
 
     let wifi_config = WifiConfig {
         ssid: env!("WIFI_SSID"),
         password: env!("WIFI_PASSWORD"),
     };
 
+    // numerous unwraps occur here:
+    // if the initialize process fails, simply reboot and try again
+
     // networking is heavy
     thread::Builder::new()
-        .stack_size(4096)
+        .stack_size(1024 * 4)
         .spawn(move || {
-            init_networking_thread(wifi_config, peripherals.modem, command_tx).unwrap();
+            init_networking_thread(wifi_config, peripherals.modem, command_tx, continuation_tx)
+                .unwrap();
+        })
+        .unwrap();
+
+    // wait for networking setup to complete before setting up new threads
+    continuation_rx.recv().unwrap();
+
+    let control_pins = ControlPins {
+        r: PinDriver::output(peripherals.pins.gpio15).unwrap(),
+        g: PinDriver::output(peripherals.pins.gpio2).unwrap(),
+
+        row_0: PinDriver::output(peripherals.pins.gpio4).unwrap(),
+        row_1: PinDriver::output(peripherals.pins.gpio16).unwrap(),
+        row_2: PinDriver::output(peripherals.pins.gpio17).unwrap(),
+
+        clk: PinDriver::output(peripherals.pins.gpio18).unwrap(),
+    };
+
+    thread::Builder::new()
+        .stack_size(1024 * 96)
+        .spawn(move || {
+            init_driver_thread(screen_rx, control_pins);
+        })
+        .unwrap();
+
+    thread::Builder::new()
+        .stack_size(1024 * 8)
+        .spawn(move || {
+            init_display_thread(command_rx, screen_tx);
         })
         .unwrap();
 }
@@ -76,9 +89,12 @@ fn init_networking_thread(
     config: WifiConfig,
     modem: impl hal::peripheral::Peripheral<P = hal::modem::Modem> + 'static,
     command_tx: Sender<protocol::Command>,
+    continuation_tx: Sender<i32>,
 ) -> Result<(), EspError> {
     let mut connection = network::establish_wifi_connection(config.ssid, config.password, modem)?;
     let mut _server = control::establish_control_server(command_tx)?;
+
+    send(&continuation_tx, 1);
 
     loop {
         retry(MAX_RETRY_ATTEMPTS, || {
@@ -94,10 +110,10 @@ fn init_networking_thread(
     }
 }
 
-const SCREEN_UPDATE_DELAY: Duration = Duration::from_micros(10);
-const DISPLAY_PROCESSING_RATE: Duration = Duration::from_millis(10); // 100Hz
+const SCREEN_UPDATE_DELAY: Duration = Duration::from_micros(200);
+const DISPLAY_PROCESSING_RATE: Duration = Duration::from_millis(20);
 
-fn init_display_thread(command_rx: Receiver<Command>, screen_tx: Sender<Screen>) {
+fn init_display_thread(command_rx: Receiver<Command>, screen_tx: Sender<Box<Screen>>) {
     let mut current_command = None;
     let mut command_queue = VecDeque::new();
     let mut now = Instant::now();
@@ -109,7 +125,21 @@ fn init_display_thread(command_rx: Receiver<Command>, screen_tx: Sender<Screen>)
     loop {
         if let Some(command) = try_recv(&command_rx) {
             info!("[display] received new command {:?}", &command);
-            command_queue.push_back(command);
+
+            match command {
+                Command::DisplayInQueue(command) => command_queue.push_back(command),
+                Command::DisplayNow(command) => {
+                    command_queue.clear();
+                    current_command = Some(CommandInAction {
+                        command,
+                        start_time: now,
+                    });
+                }
+                Command::Clear => {
+                    command_queue.clear();
+                    current_command = None;
+                }
+            }
         }
 
         if current_command.is_none() {
@@ -136,8 +166,9 @@ fn init_display_thread(command_rx: Receiver<Command>, screen_tx: Sender<Screen>)
         }
 
         let elapsed = now.elapsed();
+
         if elapsed < DISPLAY_PROCESSING_RATE {
-            thread::sleep(DISPLAY_PROCESSING_RATE - now.elapsed());
+            thread::sleep(DISPLAY_PROCESSING_RATE - elapsed);
             now = now.checked_add(DISPLAY_PROCESSING_RATE).unwrap();
         } else {
             now = Instant::now();
@@ -145,8 +176,8 @@ fn init_display_thread(command_rx: Receiver<Command>, screen_tx: Sender<Screen>)
     }
 }
 
-fn init_driver_thread(screen_rx: Receiver<Screen>, mut control_pins: ControlPins) {
-    let mut screen = protocol::drive::Screen::new();
+fn init_driver_thread(screen_rx: Receiver<Box<Screen>>, mut control_pins: ControlPins) {
+    let mut screen = Box::new(protocol::drive::Screen::new());
 
     loop {
         if let Some(new_screen) = try_recv(&screen_rx) {

@@ -35,16 +35,16 @@ impl Level {
 }
 
 #[derive(Debug)]
-pub struct Screen([[Pixel; 80]; 5]);
+pub struct Screen(pub [[Pixel; 80]; 7]);
 
 impl Screen {
     pub fn new() -> Self {
-        Self([[Pixel::default(); 80]; 5])
+        Self([[Pixel::default(); 80]; 7])
     }
 }
 
 impl Deref for Screen {
-    type Target = [[Pixel; 80]; 5];
+    type Target = [[Pixel; 80]; 7];
 
     fn deref(&self) -> &Self::Target {
         &self.0

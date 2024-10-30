@@ -10,7 +10,7 @@ use esp_idf_svc::{
 };
 
 use crate::{
-    protocol::{self, Command},
+    protocol::{self, Animation, Command, DisplayCommand},
     send,
 };
 
@@ -26,16 +26,16 @@ pub fn establish_control_server(
     let sender_ref = Arc::clone(&sender);
 
     server.fn_handler(
-        "/",
-        Method::Post,
+        "/api/",
+        Method::Get,
         move |request| -> core::result::Result<(), EspIOError> {
-            let request_content: api::Request = todo!();
+            let request_content: api::Request = api::Request {}; // todo!();
             let command: Command = parse_request(request_content);
 
             let sender = sender_ref.lock().unwrap();
             send(&sender, command);
 
-            let response_content: String = todo!();
+            let response_content: String = "ok".to_owned(); // todo!();
             let mut response = request.into_ok_response()?;
             response.write_all(response_content.as_bytes())?;
             Ok(())
@@ -46,5 +46,10 @@ pub fn establish_control_server(
 }
 
 fn parse_request(request: api::Request) -> Command {
-    todo!()
+    // todo!()
+    Command::DisplayNow(DisplayCommand {
+        text: "Hello, World!".to_owned(),
+        animation: Animation::None,
+        duration: protocol::DisplayDuration::Forever,
+    })
 }

@@ -18,12 +18,12 @@ pub struct DisplayCommand {
 
 #[derive(Debug)]
 pub struct CommandInAction {
-    pub command: Command,
+    pub command: DisplayCommand,
     pub start_time: Instant,
 }
 
 impl CommandInAction {
-    pub fn new(command: Command) -> Self {
+    pub fn new(command: DisplayCommand) -> Self {
         Self {
             command,
             start_time: Instant::now(),
@@ -33,7 +33,7 @@ impl CommandInAction {
 
 #[derive(Debug)]
 pub struct RenderResult {
-    pub screen: Screen,
+    pub screen: Box<Screen>,
     pub command_state: CommandState,
     pub screen_state: ScreenState,
 }
