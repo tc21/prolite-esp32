@@ -1,15 +1,26 @@
 use std::sync::{mpsc::Sender, Arc, Mutex};
 
-use esp_idf_svc::{http::{server::{Configuration, EspHttpServer}, Method}, io::{EspIOError, Write}, sys::EspError};
+use esp_idf_svc::{
+    http::{
+        server::{Configuration, EspHttpServer},
+        Method,
+    },
+    io::{EspIOError, Write},
+    sys::EspError,
+};
 
-use crate::{protocol::{self, Command}, send};
+use crate::{
+    protocol::{self, Command},
+    send,
+};
 
 mod api;
 
-pub fn establish_control_server(sender: Sender<protocol::Command>) -> Result<EspHttpServer<'static>, EspError> {
+pub fn establish_control_server(
+    sender: Sender<protocol::Command>,
+) -> Result<EspHttpServer<'static>, EspError> {
     // this code modified from https://github.com/esp-rs/std-training/blob/main/intro/http-server/examples/http_server.rs
-    let mut server = EspHttpServer::new(&Configuration::default())
-        .map_err(|e| e.0)?;
+    let mut server = EspHttpServer::new(&Configuration::default()).map_err(|e| e.0)?;
 
     let sender = Arc::new(Mutex::new(sender));
     let sender_ref = Arc::clone(&sender);

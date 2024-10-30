@@ -1,11 +1,16 @@
-use esp_idf_svc::{eventloop::EspSystemEventLoop, hal::{modem::Modem, peripheral::Peripheral}, sys::{nvs_flash_init, EspError}, wifi::{AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi}};
+use esp_idf_svc::{
+    eventloop::EspSystemEventLoop,
+    hal::{modem::Modem, peripheral::Peripheral},
+    sys::{nvs_flash_init, EspError},
+    wifi::{AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi},
+};
 use log::info;
 
 pub fn establish_wifi_connection(
     ssid: &str,
     password: &str,
-    modem: impl Peripheral<P = Modem> + 'static)
--> Result<EspWifi<'static>, EspError> {
+    modem: impl Peripheral<P = Modem> + 'static,
+) -> Result<EspWifi<'static>, EspError> {
     unsafe {
         // "Call nvs_flash_init before starting WiFi/BT"
         nvs_flash_init();

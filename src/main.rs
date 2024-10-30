@@ -1,17 +1,25 @@
-use std::{collections::VecDeque, sync::mpsc::{self, Receiver, Sender, TryRecvError}, thread, time::{Duration, Instant}};
+use std::{
+    collections::VecDeque,
+    sync::mpsc::{self, Receiver, Sender, TryRecvError},
+    thread,
+    time::{Duration, Instant},
+};
 
 use config::WifiConfig;
 use driver::ControlPins;
-use esp_idf_svc::{hal::{self, gpio::PinDriver}, sys::EspError};
+use esp_idf_svc::{
+    hal::{self, gpio::PinDriver},
+    sys::EspError,
+};
 use log::info;
 use protocol::{drive::Screen, Command, CommandInAction, CommandState, ScreenState};
 
-mod network;
+mod config;
 mod control;
 mod display;
-mod protocol;
-mod config;
 mod driver;
+mod network;
+mod protocol;
 
 fn main() {
     // It is necessary to call this function once. Otherwise some patches to the runtime
@@ -50,18 +58,16 @@ fn main() {
 
     let wifi_config = WifiConfig {
         ssid: env!("WIFI_SSID"),
-        password: env!("WIFI_PASSWORD")
+        password: env!("WIFI_PASSWORD"),
     };
 
     // networking is heavy
-    thread::Builder::new().stack_size(4096).spawn(move || {
-        init_networking_thread(
-            wifi_config,
-            peripherals.modem,
-            command_tx
-        ).unwrap();
-    }).unwrap();
-
+    thread::Builder::new()
+        .stack_size(4096)
+        .spawn(move || {
+            init_networking_thread(wifi_config, peripherals.modem, command_tx).unwrap();
+        })
+        .unwrap();
 }
 
 const MAX_RETRY_ATTEMPTS: usize = 3;
@@ -69,9 +75,9 @@ const MAX_RETRY_ATTEMPTS: usize = 3;
 fn init_networking_thread(
     config: WifiConfig,
     modem: impl hal::peripheral::Peripheral<P = hal::modem::Modem> + 'static,
-    command_tx: Sender<protocol::Command>
+    command_tx: Sender<protocol::Command>,
 ) -> Result<(), EspError> {
-    let mut connection = network::establish_wifi_connection(&config.ssid, &config.password, modem)?;
+    let mut connection = network::establish_wifi_connection(config.ssid, config.password, modem)?;
     let mut _server = control::establish_control_server(command_tx)?;
 
     loop {
@@ -81,14 +87,15 @@ fn init_networking_thread(
             }
 
             Ok(())
-        }).unwrap();
+        })
+        .unwrap();
 
         thread::sleep(Duration::from_secs(10));
     }
 }
 
 const SCREEN_UPDATE_DELAY: Duration = Duration::from_micros(10);
-const DISPLAY_PROCESSING_RATE: Duration = Duration::from_millis(10);  // 100Hz
+const DISPLAY_PROCESSING_RATE: Duration = Duration::from_millis(10); // 100Hz
 
 fn init_display_thread(command_rx: Receiver<Command>, screen_tx: Sender<Screen>) {
     let mut current_command = None;
@@ -105,10 +112,13 @@ fn init_display_thread(command_rx: Receiver<Command>, screen_tx: Sender<Screen>)
             command_queue.push_back(command);
         }
 
-        if let None = current_command {
+        if current_command.is_none() {
             if let Some(next_command) = command_queue.pop_front() {
                 info!("[display] starting render of command {:?}", &next_command);
-                current_command = Some(CommandInAction { command: next_command, start_time: now })
+                current_command = Some(CommandInAction {
+                    command: next_command,
+                    start_time: now,
+                })
             }
         }
 
@@ -144,7 +154,7 @@ fn init_driver_thread(screen_rx: Receiver<Screen>, mut control_pins: ControlPins
         }
 
         match driver::display_screen(&screen, &mut control_pins) {
-            Ok(_) => { /* do nothing */ },
+            Ok(_) => { /* do nothing */ }
             Err(e) => info!("failed to drive screen: {:?}", e),
         };
 
@@ -152,12 +162,15 @@ fn init_driver_thread(screen_rx: Receiver<Screen>, mut control_pins: ControlPins
     }
 }
 
-fn retry<T>(max_attempts: usize, mut f: impl FnMut() -> Result<T, EspError>) -> Result<T, EspError> {
+fn retry<T>(
+    max_attempts: usize,
+    mut f: impl FnMut() -> Result<T, EspError>,
+) -> Result<T, EspError> {
     for attempt in 1..=max_attempts {
         let result = f();
 
         if result.is_ok() || attempt == max_attempts {
-            return result
+            return result;
         }
     }
 

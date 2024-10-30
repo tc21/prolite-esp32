@@ -6,25 +6,28 @@ use super::drive::Screen;
 pub enum Command {
     DisplayInQueue(DisplayCommand),
     DisplayNow(DisplayCommand),
-    Clear
+    Clear,
 }
 
 #[derive(Debug)]
 pub struct DisplayCommand {
     pub text: String,
     pub animation: Animation,
-    pub duration: DisplayDuration
+    pub duration: DisplayDuration,
 }
 
 #[derive(Debug)]
 pub struct CommandInAction {
     pub command: Command,
-    pub start_time: Instant
+    pub start_time: Instant,
 }
 
 impl CommandInAction {
     pub fn new(command: Command) -> Self {
-        Self { command, start_time: Instant::now() }
+        Self {
+            command,
+            start_time: Instant::now(),
+        }
     }
 }
 
@@ -32,19 +35,19 @@ impl CommandInAction {
 pub struct RenderResult {
     pub screen: Screen,
     pub command_state: CommandState,
-    pub screen_state: ScreenState
+    pub screen_state: ScreenState,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandState {
     InAction,
-    Finished
+    Finished,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScreenState {
     Updated,
-    Unchanged
+    Unchanged,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,7 +55,7 @@ pub enum Animation {
     None,
     SlideIn(Direction, Speed),
     SlideOut(Direction, Speed),
-    SlideThrough(Direction, Speed)
+    SlideThrough(Direction, Speed),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,7 +63,7 @@ pub enum Direction {
     TopToBottom,
     BottomToTop,
     LeftToRight,
-    RightToLeft
+    RightToLeft,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,5 +78,5 @@ pub enum Speed {
 pub enum DisplayDuration {
     Finite(Duration),
     UntilAnimationEnd,
-    Forever
+    Forever,
 }

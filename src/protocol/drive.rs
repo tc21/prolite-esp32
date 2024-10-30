@@ -5,19 +5,22 @@ use esp_idf_svc::hal;
 #[derive(Debug, Clone, Copy)]
 pub struct Pixel {
     pub red: Level,
-    pub green: Level
+    pub green: Level,
 }
 
 impl Default for Pixel {
     fn default() -> Self {
-        Self { red: Level::Off, green: Level::Off }
+        Self {
+            red: Level::Off,
+            green: Level::Off,
+        }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Level {
     Off,
-    On
+    On,
 }
 
 impl Level {
