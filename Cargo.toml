@@ -1,14 +1,14 @@
 [package]
 name = "prolite"
 version = "0.1.0"
-authors = ["Tianyi Cao <tc21@live.com>"]
+authors = ["Luce Cao <tc21@live.com>"]
 edition = "2021"
 resolver = "2"
 rust-version = "1.77"
 
 [[bin]]
 name = "prolite"
-harness = false # do not use the built in cargo test harness -> resolve rust-analyzer errors
+harness = false # do not use the built in cargo test harness -> resolsve rust-analyzer errors
 
 [profile.release]
 opt-level = "s"

@@ -1,7 +1,8 @@
 use std::{collections::VecDeque, sync::mpsc::{self, Receiver, Sender, TryRecvError}, thread, time::{Duration, Instant}};
 
-use config::Config;
-use esp_idf_svc::{hal, sys::EspError};
+use config::WifiConfig;
+use driver::ControlPins;
+use esp_idf_svc::{hal::{self, gpio::PinDriver}, sys::EspError};
 use log::info;
 use protocol::{drive::Screen, Command, CommandInAction, CommandState, ScreenState};
 
@@ -22,25 +23,40 @@ fn main() {
 
     log::info!("Hello, world!");
 
-    let config = get_config();
     let peripherals = hal::prelude::Peripherals::take().unwrap();
     let (command_tx, command_rx) = mpsc::channel();
     let (screen_tx, screen_rx) = mpsc::channel();
 
     // numerous unwraps occur here:
     // if the initialize process fails, simply reboot and try again
+    let control_pins = ControlPins {
+        r: PinDriver::output(peripherals.pins.gpio2).unwrap(),
+        g: PinDriver::output(peripherals.pins.gpio4).unwrap(),
+
+        row_0: PinDriver::output(peripherals.pins.gpio15).unwrap(),
+        row_1: PinDriver::output(peripherals.pins.gpio16).unwrap(),
+        row_2: PinDriver::output(peripherals.pins.gpio17).unwrap(),
+
+        clk: PinDriver::output(peripherals.pins.gpio18).unwrap(),
+    };
+
     thread::spawn(move || {
-        init_driver_thread(screen_rx);
+        init_driver_thread(screen_rx, control_pins);
     });
 
     thread::spawn(move || {
         init_display_thread(command_rx, screen_tx);
     });
 
+    let wifi_config = WifiConfig {
+        ssid: env!("WIFI_SSID"),
+        password: env!("WIFI_PASSWORD")
+    };
+
     // networking is heavy
     thread::Builder::new().stack_size(4096).spawn(move || {
         init_networking_thread(
-            config,
+            wifi_config,
             peripherals.modem,
             command_tx
         ).unwrap();
@@ -51,11 +67,11 @@ fn main() {
 const MAX_RETRY_ATTEMPTS: usize = 3;
 
 fn init_networking_thread(
-    config: Config,
+    config: WifiConfig,
     modem: impl hal::peripheral::Peripheral<P = hal::modem::Modem> + 'static,
     command_tx: Sender<protocol::Command>
 ) -> Result<(), EspError> {
-    let mut connection = network::establish_wifi_connection(&config.wifi.ssid, &config.wifi.password, modem)?;
+    let mut connection = network::establish_wifi_connection(&config.ssid, &config.password, modem)?;
     let mut _server = control::establish_control_server(command_tx)?;
 
     loop {
@@ -71,7 +87,7 @@ fn init_networking_thread(
     }
 }
 
-const SCREEN_UPDATE_DELAY: Duration = Duration::from_nanos(40);
+const SCREEN_UPDATE_DELAY: Duration = Duration::from_micros(10);
 const DISPLAY_PROCESSING_RATE: Duration = Duration::from_millis(10);  // 100Hz
 
 fn init_display_thread(command_rx: Receiver<Command>, screen_tx: Sender<Screen>) {
@@ -119,7 +135,7 @@ fn init_display_thread(command_rx: Receiver<Command>, screen_tx: Sender<Screen>)
     }
 }
 
-fn init_driver_thread(screen_rx: Receiver<Screen>) {
+fn init_driver_thread(screen_rx: Receiver<Screen>, mut control_pins: ControlPins) {
     let mut screen = protocol::drive::Screen::new();
 
     loop {
@@ -127,13 +143,13 @@ fn init_driver_thread(screen_rx: Receiver<Screen>) {
             screen = new_screen
         }
 
-        driver::display_screen(&screen);
+        match driver::display_screen(&screen, &mut control_pins) {
+            Ok(_) => { /* do nothing */ },
+            Err(e) => info!("failed to drive screen: {:?}", e),
+        };
+
         thread::sleep(SCREEN_UPDATE_DELAY);
     }
-}
-
-fn get_config() -> Config {
-    todo!()
 }
 
 fn retry<T>(max_attempts: usize, mut f: impl FnMut() -> Result<T, EspError>) -> Result<T, EspError> {

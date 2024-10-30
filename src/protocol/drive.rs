@@ -1,5 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
+use esp_idf_svc::hal;
+
 #[derive(Debug, Clone, Copy)]
 pub struct Pixel {
     pub red: Level,
@@ -16,6 +18,17 @@ impl Default for Pixel {
 pub enum Level {
     Off,
     On
+}
+
+impl Level {
+    // we wrote this so we can have multiple levels, not just low and high,
+    // but if we end up with just two levels, we can do away with this layer of abstraction
+    pub fn to_gpio_level(self) -> hal::gpio::Level {
+        match self {
+            Level::Off => hal::gpio::Level::Low,
+            Level::On => hal::gpio::Level::High,
+        }
+    }
 }
 
 #[derive(Debug)]
