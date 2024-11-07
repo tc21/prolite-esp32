@@ -1,6 +1,6 @@
 glyphs.txt and glyphs_fullwidth.txt are licensed under the SIL Open Font License, Version 1.1. The license is copied below.
 
-All other files, and additionally glyphs_fullwidth.txt, are licensed under the MIT License. The license is copied below.
+All other files are licensed under the MIT License. The license is copied below.
 
 This project includes code from github.com/esp-rs/std-training. The license for that code is reproduced below.
 
