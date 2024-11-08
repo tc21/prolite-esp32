@@ -19,11 +19,10 @@ use esp_idf_svc::{
 use gpio::ControlPins;
 use log::info;
 use prolite::{
-    api::{Command, Content},
+    api::{Command, Content, ContentGroup},
     ScreenBuffer,
 };
 use renderer::{
-    glyphs,
     render_result::{ContentState, CurrentContent, ScreenBufferState},
     UnknownGlyphBehavior,
 };
@@ -47,8 +46,6 @@ fn main() {
     };
     // Enable WDT on the main task (this task).
     unsafe { sys::esp_task_wdt_add(sys::xTaskGetCurrentTaskHandle()) };
-
-    info!("{:?}", hal::cpu::core());
 
     let peripherals = hal::prelude::Peripherals::take().unwrap();
 
@@ -150,24 +147,23 @@ fn initialize_renderer_thread(
             }
         }
 
-        if let Some(cc) = current_content.as_mut()
-        {
-            let render = renderer::render(cc.content(), cc.start_time, now, &cc.rendered_glyphs);
+        if let Some(cc) = current_content.as_mut() {
+            let render = renderer::render(cc, now);
 
             // todo move to better location
+            let mut content_stepped = false;
+
             if render.content_state == ContentState::Complete {
                 match cc.step() {
                     ContentState::Complete => {
                         info!("[render] finished rendering previous content");
                         current_content = None;
                     }
-                    ContentState::Incomplete => { /* do nothing */ }
+                    ContentState::Incomplete => content_stepped = true
                 }
             }
 
-            if render.buffer_state != ScreenBufferState::NotUpdated {
-                // info!("rendered: \n{}", &render.buffer);
-
+            if content_stepped || render.buffer_state != ScreenBufferState::NotUpdated {
                 send(&screen_buffer_tx, render.buffer);
             }
         }
@@ -225,7 +221,7 @@ fn read_next_command(
             command.extend_from_slice(&buffer);
 
             // wait a tiny while to see if more data is coming
-            thread::sleep(Duration::from_millis(1));
+            thread::sleep(Duration::from_millis(20));
             remaining_read = uart_receiver.remaining_read().map_err(|e| e.to_string())?;
         }
 
@@ -234,17 +230,19 @@ fn read_next_command(
 }
 
 fn initial_buffer() -> Box<ScreenBuffer> {
-    let content = Content {
-        text: "booting...".to_string(),
-        color: prolite::api::Color::Orange,
-        animation: prolite::api::Animation::None {
-            duration: prolite::api::ContentDuration::Forever,
-        },
+    let content_group = ContentGroup {
+        contents: vec![Content {
+            text: "booting...".to_string(),
+            color: prolite::api::Color::Orange,
+            animation: prolite::api::Animation::None {
+                duration: prolite::api::ContentDuration::Forever,
+            },
+        }],
+        repeat: prolite::api::Repeat::None,
     };
+    let content = CurrentContent::new(content_group, UnknownGlyphBehavior::Ignore);
 
-    let glyphs = glyphs::get_glyph_placement(&content.text, UnknownGlyphBehavior::Ignore);
-
-    renderer::render(&content, Instant::now(), Instant::now(), &glyphs).buffer
+    renderer::render(&content, Instant::now()).buffer
 }
 
 fn send<T>(sender: &Sender<T>, value: T) {

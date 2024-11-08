@@ -1,12 +1,11 @@
 use std::time::{Duration, Instant};
 
-use glyphs::PlacedGlyphs;
 pub use glyphs::UnknownGlyphBehavior;
 
 use prolite::{Pixel, ScreenBuffer};
 
 use prolite::api::{Animation, AnimationDirection, Content, ContentDuration, Interval};
-use render_result::{ContentState, RenderResult, ScreenBufferState};
+use render_result::{ContentState, CurrentContent, RenderResult, ScreenBufferState};
 
 mod animations;
 pub mod glyphs;
@@ -55,16 +54,15 @@ fn get_finite_animation_duration(interval: &Interval, animated_length: usize) ->
 }
 
 pub fn render(
-    content: &Content,
-    start_time: Instant,
+    current_content: &CurrentContent,
     current_time: Instant,
-    placed_glyphs: &PlacedGlyphs,
 ) -> RenderResult {
-    let duration = get_duration(content, placed_glyphs.width);
-    let time_elapsed = current_time - start_time;
+    let content = current_content.content();
+    let duration = get_duration(content, current_content.rendered_glyphs.width);
+    let time_elapsed = current_time - current_content.step_start_time;
     let global_offset = animations::get_global_offset(
         &content.animation,
-        placed_glyphs.width,
+        current_content.rendered_glyphs.width,
         duration,
         time_elapsed,
     );
@@ -73,7 +71,7 @@ pub fn render(
 
     let mut buffer = Box::new(ScreenBuffer([[Pixel::default(); 80]; 7]));
 
-    for placed_glyph in &placed_glyphs.glyphs {
+    for placed_glyph in &current_content.rendered_glyphs.glyphs {
         let glyph = placed_glyph.glyph;
 
         let start_col = placed_glyph.x_offset as i32 + global_offset.x;
@@ -90,7 +88,8 @@ pub fn render(
     let mut buffer_state = ScreenBufferState::Updated;
 
     if let Animation::None { .. } = content.animation {
-        if current_time - start_time > Duration::from_secs(1) {
+        // this is nonzero to account for the time between starting the render and now
+        if time_elapsed > Duration::from_millis(200) {
             buffer_state = ScreenBufferState::NotUpdated;
         }
     }

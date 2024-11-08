@@ -23,13 +23,13 @@ pub fn establish_control_server(
     // if this fails we will just restart
     let startup_command = Command::ShowNow {
         content: ContentGroup {
-            content: Content::Content {
+            contents: vec![Content {
                 text: format!("IP: {}", ip_address),
                 color: Color::default(),
                 animation: prolite::api::Animation::None {
                     duration: ContentDuration::Forever,
                 },
-            },
+            }],
             repeat: Repeat::None,
         },
     };

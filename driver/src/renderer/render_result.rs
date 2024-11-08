@@ -10,7 +10,7 @@ use super::{
 #[derive(Debug)]
 pub struct CurrentContent {
     content_group: ContentGroup,
-    pub start_time: Instant,
+    pub step_start_time: Instant,
     pub rendered_glyphs: PlacedGlyphs,
     step: usize,
     behavior: UnknownGlyphBehavior
@@ -23,7 +23,7 @@ impl CurrentContent {
         Self {
             content_group,
             step: 0,
-            start_time: Instant::now(),
+            step_start_time: Instant::now(),
             rendered_glyphs,
             behavior
         }
@@ -50,14 +50,15 @@ impl CurrentContent {
                 },
             }
         } else {
-            self.rendered_glyphs = get_glyph_placement(&self.content_group.contents[0].text, self.behavior);
             self.step += 1;
+            self.initialize_current_step();
             ContentState::Incomplete
         }
     }
 
     fn initialize_current_step(&mut self) {
-        self.rendered_glyphs = get_glyph_placement(&self.content_group.contents[0].text, self.behavior);
+        self.step_start_time = Instant::now();
+        self.rendered_glyphs = get_glyph_placement(&self.content_group.contents[self.step].text, self.behavior);
     }
 
     pub fn content(&self) -> &Content {
