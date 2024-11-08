@@ -2,7 +2,7 @@ use std::{
     collections::VecDeque,
     sync::mpsc::{self, Receiver, Sender, TryRecvError},
     thread,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use config::RENDER_FRAMERATE;
@@ -13,12 +13,20 @@ use esp_idf_svc::{
         gpio::{AnyInputPin, AnyOutputPin, PinDriver},
         uart::{config::Config, UartDriver},
     },
-    sys,
+    io::Read,
+    sys::{self},
 };
 use gpio::ControlPins;
 use log::info;
-use prolite::{api::{Content, Repeat}, ScreenBuffer};
-use renderer::render_result::{ContentState, CurrentContent, ScreenBufferState};
+use prolite::{
+    api::{Command, Content, Repeat},
+    ScreenBuffer,
+};
+use renderer::{
+    glyphs,
+    render_result::{ContentState, CurrentContent, ScreenBufferState},
+    UnknownGlyphBehavior,
+};
 
 mod config;
 mod driver;
@@ -57,9 +65,9 @@ fn main() {
     };
 
     let uart_rx = UartDriver::new(
-        peripherals.uart0,
-        peripherals.pins.gpio43,
-        peripherals.pins.gpio44,
+        peripherals.uart1,
+        peripherals.pins.gpio14,
+        peripherals.pins.gpio13,
         Option::<AnyInputPin>::None,
         Option::<AnyOutputPin>::None,
         &Config::default(),
@@ -108,23 +116,11 @@ fn initialize_renderer_thread(
     command_rx: Receiver<prolite::api::Command>,
     screen_buffer_tx: Sender<Box<ScreenBuffer>>,
 ) {
-    let content = Content {
-        text: "Now Playing: 初音ミクの消失 - cosMo".to_owned(),
-        color: prolite::api::Color::Green,
-        animation: prolite::api::Animation::Slide(
-            prolite::api::SlideType::InOut,
-            prolite::api::AnimationDirection::RightToLeft,
-            prolite::api::Interval::DPS(8),
-        ),
-        repeat: prolite::api::Repeat::Forever
-    };
-
     let mut current_content = None;
     let mut content_queue = Box::new(VecDeque::new());
     let mut now = Instant::now();
 
-    content_queue.push_back(content);
-
+    let behavior = UnknownGlyphBehavior::ReplaceWithPlaceholder;
 
     // Loop:
     // 1. Receive new commands
@@ -135,13 +131,10 @@ fn initialize_renderer_thread(
             info!("[render] received new command {:?}", &command);
 
             match command {
-                prolite::api::Command::AddToQueue(command) => content_queue.push_back(command),
-                prolite::api::Command::ShowNow(command) => {
+                prolite::api::Command::AddToQueue { content } => content_queue.push_back(content),
+                prolite::api::Command::ShowNow { content } => {
                     content_queue.clear();
-                    current_content = Some(CurrentContent {
-                        content: command,
-                        start_time: now,
-                    });
+                    current_content = Some(CurrentContent::new(content, behavior));
                 }
                 prolite::api::Command::Clear => {
                     content_queue.clear();
@@ -151,52 +144,42 @@ fn initialize_renderer_thread(
         }
 
         if current_content.is_none() {
-            if let Some(next_command) = content_queue.pop_front() {
-                info!("[render] starting render of command {:?}", &next_command);
-                current_content = Some(CurrentContent {
-                    content: next_command,
-                    start_time: now,
-                })
+            if let Some(next_content) = content_queue.pop_front() {
+                info!("[render] starting render of content {:?}", &next_content);
+                current_content = Some(CurrentContent::new(next_content, behavior))
             }
         }
 
-        if let Some(command) = current_content.as_ref() {
-            let render = renderer::render(
-                &command.content,
-                command.start_time,
-                now,
-                renderer::UnknownGlyphBehavior::ReplaceWithPlaceholder,
-            );
+        if let Some(CurrentContent {
+            content,
+            start_time,
+            rendered_glyphs,
+        }) = current_content.as_ref()
+        {
+            let render = renderer::render(content, *start_time, now, rendered_glyphs);
 
             // todo move to better location
             if render.content_state == ContentState::Complete {
-                match command.content.repeat {
+                match content.repeat {
                     prolite::api::Repeat::None => {
-                        info!("[render] finished rendering previous command");
-                        current_content = None
-                    },
+                        info!("[render] finished rendering previous content");
+                        current_content = None;
+                    }
 
                     prolite::api::Repeat::Forever => {
-                        current_content = Some(CurrentContent {
-                            content: command.content.clone(),
-                            start_time: Instant::now(),
-                        })
-                    },
+                        current_content = Some(CurrentContent::new(content.clone(), behavior))
+                    }
 
                     prolite::api::Repeat::Times(times) => {
-                        let mut content = command.content.clone();
+                        let mut content = content.clone();
                         content.repeat = match times {
-                            ..1 => Repeat::None,
-                            _ => Repeat::Times(times - 1)
+                            ..=1 => Repeat::None,
+                            _ => Repeat::Times(times - 1),
                         };
 
-                        current_content = Some(CurrentContent {
-                            content,
-                            start_time: Instant::now(),
-                        })
-                    },
+                        current_content = Some(CurrentContent::new(content, behavior))
+                    }
                 }
-
             }
 
             if render.buffer_state != ScreenBufferState::NotUpdated {
@@ -217,40 +200,69 @@ fn initialize_renderer_thread(
     }
 }
 
-fn initialize_uart_thread(uart_receiver: UartDriver, buffer_sender: Sender<prolite::api::Command>) {
-    let mut buffer = [0u8; 256];
+fn initialize_uart_thread(
+    mut uart_receiver: UartDriver,
+    buffer_sender: Sender<prolite::api::Command>,
+) {
     info!("uart init");
 
     loop {
-        let read = uart_receiver.read(&mut buffer, UART_READ_DELAY_TICKS);
+        let read = read_next_command(&mut uart_receiver);
         match read {
-            Ok(0) => { /* do nothing */ }
-            Ok(_) => match prolite::api::Command::deserialize(&buffer) {
-                Ok(command) => send(&buffer_sender, command),
-                Err(e) => info!("[uart] failed to deserialize command: {:?}", e),
-            },
-            Err(_) => { /* do nothing */ }
+            Ok(Ok(command)) => send(&buffer_sender, command),
+            Ok(Err(e)) => info!("[uart] failed to deserialize command: {}", e),
+            Err(e) => info!("[uart] failed to receive command: {}", e),
         }
     }
 }
 
-const UART_READ_DELAY_TICKS: u32 = 1000;
+fn read_next_command(
+    uart_receiver: &mut UartDriver,
+) -> Result<serde_json::Result<Command>, String> {
+    let mut command = vec![];
+
+    loop {
+        let mut remaining_read = uart_receiver.remaining_read().map_err(|e| e.to_string())?;
+
+        if remaining_read == 0 {
+            thread::sleep(Duration::from_secs(1));
+            continue;
+        }
+
+        while remaining_read > 0 {
+            let to_read = if remaining_read > 256 {
+                256
+            } else {
+                remaining_read
+            };
+            let mut buffer = vec![0; to_read];
+            uart_receiver
+                .read_exact(&mut buffer)
+                .map_err(|e| e.to_string())?;
+            command.extend_from_slice(&buffer);
+
+            // wait a tiny while to see if more data is coming
+            thread::sleep(Duration::from_millis(1));
+            remaining_read = uart_receiver.remaining_read().map_err(|e| e.to_string())?;
+        }
+
+        return Ok(serde_json::from_slice(&command));
+    }
+}
 
 fn initial_buffer() -> Box<ScreenBuffer> {
     let content = Content {
-        text: "Initializing".to_string(),
+        text: "booting...".to_string(),
         color: prolite::api::Color::Orange,
-        animation: prolite::api::Animation::None(prolite::api::ContentDuration::Forever),
-        repeat: prolite::api::Repeat::None
+        animation: prolite::api::Animation::None {
+            duration: prolite::api::ContentDuration::Forever,
+        },
+        repeat: prolite::api::Repeat::None,
     };
 
-    renderer::render(
-        &content,
-        Instant::now(),
-        Instant::now(),
-        renderer::UnknownGlyphBehavior::Ignore,
-    )
-    .buffer
+    let glyphs = glyphs::get_glyph_placement(&content.text, UnknownGlyphBehavior::Ignore);
+
+    renderer::render(&content, Instant::now(), Instant::now(), &glyphs).buffer
 }
 
 fn send<T>(sender: &Sender<T>, value: T) {

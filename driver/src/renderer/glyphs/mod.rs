@@ -12,12 +12,11 @@ fn get_glyph(c: char) -> Option<Glyph> {
     let codepoint = c as usize;
 
     if codepoint >= CHARS_MAX {
-        CHARS_EXTRA.get(&c)
-            .map(|glyph| *glyph)
+        CHARS_EXTRA.get(&c).map(|glyph| *glyph)
     } else {
         match CHARS[codepoint] {
             EMPTY_GLYPH => None,
-            x => Some(x)
+            x => Some(x),
         }
     }
 }
@@ -42,7 +41,7 @@ pub fn get_glyph_placement(text: &str, behavior: UnknownGlyphBehavior) -> Placed
                             glyph: PLACEHOLDER_GLYPH,
                             x_offset: width,
                         });
-                        width +=  PLACEHOLDER_GLYPH.width()
+                        width += PLACEHOLDER_GLYPH.width()
                     }
                     UnknownGlyphBehavior::Ignore => { /* do nothing */ }
                 }

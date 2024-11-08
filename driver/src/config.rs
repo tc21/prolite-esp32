@@ -1,6 +1,9 @@
 use std::time::Duration;
 
-use esp_idf_svc::hal::{self, gpio::{Level, PinDriver}};
+use esp_idf_svc::hal::{
+    self,
+    gpio::{Level, PinDriver},
+};
 
 pub type RedPin = PinDriver<'static, hal::gpio::Gpio4, hal::gpio::Output>;
 pub type GreenPin = PinDriver<'static, hal::gpio::Gpio5, hal::gpio::Output>;

@@ -35,7 +35,6 @@ pub fn display_screen(
             wait_clock_delay();
         }
 
-
         control_pins.row_0.set_level(row_0_level)?;
         control_pins.row_1.set_level(row_1_level)?;
         control_pins.row_2.set_level(row_2_level)?;

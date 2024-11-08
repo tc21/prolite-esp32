@@ -35,8 +35,12 @@ pub fn get_global_offset(
     };
 
     match animation {
-        Animation::None(_) => default_offset,
-        Animation::Slide(slide_type, direction, _) => {
+        Animation::None { .. } => default_offset,
+        Animation::Slide {
+            slide_type,
+            direction,
+            ..
+        } => {
             // not sure if making these into functions is even worth it,
             // it may be too complicated to optimize away
             let top_position = || Offset {

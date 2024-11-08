@@ -28,9 +28,9 @@ fn main() {
     let peripherals = hal::prelude::Peripherals::take().unwrap();
 
     let uart_tx = UartDriver::new(
-        peripherals.uart0,
-        peripherals.pins.gpio43,
-        peripherals.pins.gpio44,
+        peripherals.uart1,
+        peripherals.pins.gpio4,
+        peripherals.pins.gpio5,
         Option::<AnyInputPin>::None,
         Option::<AnyOutputPin>::None,
         &Config::default(),
@@ -45,7 +45,9 @@ fn main() {
     let mut connection =
         network::establish_wifi_connection(config.ssid, config.password, peripherals.modem)
             .unwrap();
-    let mut _server = controller::establish_control_server(uart_tx).unwrap();
+
+    let ip_address = connection.sta_netif().get_ip_info().unwrap().ip;
+    let mut _server = controller::establish_control_server(uart_tx, ip_address).unwrap();
 
     loop {
         retry(MAX_RETRY_ATTEMPTS, || {

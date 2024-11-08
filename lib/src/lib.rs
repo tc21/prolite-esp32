@@ -1,4 +1,7 @@
-use std::{fmt::Display, ops::{Deref, DerefMut}};
+use std::{
+    fmt::Display,
+    ops::{Deref, DerefMut},
+};
 
 pub mod api;
 
@@ -21,7 +24,11 @@ impl Pixel {
     fn deserialize(x: u8) -> Self {
         Self {
             red: if x & 1 == 1 { Level::On } else { Level::Off },
-            green: if (x << 1) & 1 == 1 { Level::On } else { Level::Off }
+            green: if (x << 1) & 1 == 1 {
+                Level::On
+            } else {
+                Level::Off
+            },
         }
     }
 }
@@ -46,7 +53,7 @@ pub struct ScreenBuffer(pub [[Pixel; DISPLAY_WIDTH]; DISPLAY_HEIGHT]);
 
 impl ScreenBuffer {
     pub const WIDTH: usize = DISPLAY_WIDTH;
-    pub const HEIGHT: usize  = DISPLAY_HEIGHT;
+    pub const HEIGHT: usize = DISPLAY_HEIGHT;
 
     pub fn new() -> Self {
         Self([[Pixel::default(); DISPLAY_WIDTH]; DISPLAY_HEIGHT])
@@ -54,7 +61,7 @@ impl ScreenBuffer {
 
     pub fn set_if_in_bounds(&mut self, row: i32, col: i32, pixel: Pixel) {
         if row < 0 || col < 0 || row >= DISPLAY_HEIGHT as i32 || col >= DISPLAY_WIDTH as i32 {
-            return
+            return;
         }
 
         self[row as usize][col as usize] = pixel;
@@ -72,8 +79,6 @@ impl ScreenBuffer {
         result
     }
 
-
-
     pub fn deserialize(s: [u8; DISPLAY_HEIGHT * DISPLAY_WIDTH]) -> Self {
         let mut result = Self::new();
 
@@ -89,9 +94,18 @@ impl ScreenBuffer {
 
 impl Display for ScreenBuffer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let red = Pixel { red: Level::On, green: Level::Off };
-        let green = Pixel { red: Level::Off, green: Level::On };
-        let orange = Pixel { red: Level::On, green: Level::On };
+        let red = Pixel {
+            red: Level::On,
+            green: Level::Off,
+        };
+        let green = Pixel {
+            red: Level::Off,
+            green: Level::On,
+        };
+        let orange = Pixel {
+            red: Level::On,
+            green: Level::On,
+        };
 
         for row in 0..DISPLAY_HEIGHT {
             for col in 0..DISPLAY_WIDTH {
