@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use prolite::{api::Content, ScreenBuffer};
+use prolite::{api::{Content, ContentGroup, Repeat}, ScreenBuffer};
 
 use super::{
     glyphs::{get_glyph_placement, PlacedGlyphs},
@@ -9,20 +9,59 @@ use super::{
 
 #[derive(Debug)]
 pub struct CurrentContent {
-    pub content: Content,
+    content_group: ContentGroup,
     pub start_time: Instant,
     pub rendered_glyphs: PlacedGlyphs,
+    step: usize,
+    behavior: UnknownGlyphBehavior
 }
 
 impl CurrentContent {
-    pub fn new(content: Content, behavior: UnknownGlyphBehavior) -> Self {
-        let rendered_glyphs = get_glyph_placement(&content.text, behavior);
+    pub fn new(content_group: ContentGroup, behavior: UnknownGlyphBehavior) -> Self {
+        let rendered_glyphs = get_glyph_placement(&content_group.contents[0].text, behavior);
 
         Self {
-            content,
+            content_group,
+            step: 0,
             start_time: Instant::now(),
             rendered_glyphs,
+            behavior
         }
+    }
+
+    pub fn step(&mut self) -> ContentState {
+        if self.content_group.contents.len() == self.step + 1 {
+            match self.content_group.repeat {
+                prolite::api::Repeat::None => ContentState::Complete,
+                prolite::api::Repeat::Forever => {
+                    self.step = 0;
+                    self.initialize_current_step();
+                    ContentState::Incomplete
+                },
+                prolite::api::Repeat::Times(n) => {
+                    if n == 0 {
+                        ContentState::Complete
+                    } else {
+                        self.step = 0;
+                        self.initialize_current_step();
+                        self.content_group.repeat = Repeat::Times(n - 1);
+                        ContentState::Incomplete
+                    }
+                },
+            }
+        } else {
+            self.rendered_glyphs = get_glyph_placement(&self.content_group.contents[0].text, self.behavior);
+            self.step += 1;
+            ContentState::Incomplete
+        }
+    }
+
+    fn initialize_current_step(&mut self) {
+        self.rendered_glyphs = get_glyph_placement(&self.content_group.contents[0].text, self.behavior);
+    }
+
+    pub fn content(&self) -> &Content {
+        &self.content_group.contents[self.step]
     }
 }
 

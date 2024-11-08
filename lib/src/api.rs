@@ -7,9 +7,16 @@ use std::time::Duration;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "method", rename_all = "snake_case")]
 pub enum Command {
-    AddToQueue { content: Content },
-    ShowNow { content: Content },
+    AddToQueue { content: ContentGroup },
+    ShowNow { content: ContentGroup },
     Clear,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ContentGroup {
+    pub contents: Vec<Content>,
+    #[serde(default)]
+    pub repeat: Repeat,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -19,8 +26,6 @@ pub struct Content {
     pub color: Color,
     #[serde(default)]
     pub animation: Animation,
-    #[serde(default)]
-    pub repeat: Repeat,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

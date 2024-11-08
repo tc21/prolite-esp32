@@ -19,7 +19,7 @@ use esp_idf_svc::{
 use gpio::ControlPins;
 use log::info;
 use prolite::{
-    api::{Command, Content, Repeat},
+    api::{Command, Content},
     ScreenBuffer,
 };
 use renderer::{
@@ -150,35 +150,18 @@ fn initialize_renderer_thread(
             }
         }
 
-        if let Some(CurrentContent {
-            content,
-            start_time,
-            rendered_glyphs,
-        }) = current_content.as_ref()
+        if let Some(cc) = current_content.as_mut()
         {
-            let render = renderer::render(content, *start_time, now, rendered_glyphs);
+            let render = renderer::render(cc.content(), cc.start_time, now, &cc.rendered_glyphs);
 
             // todo move to better location
             if render.content_state == ContentState::Complete {
-                match content.repeat {
-                    prolite::api::Repeat::None => {
+                match cc.step() {
+                    ContentState::Complete => {
                         info!("[render] finished rendering previous content");
                         current_content = None;
                     }
-
-                    prolite::api::Repeat::Forever => {
-                        current_content = Some(CurrentContent::new(content.clone(), behavior))
-                    }
-
-                    prolite::api::Repeat::Times(times) => {
-                        let mut content = content.clone();
-                        content.repeat = match times {
-                            ..=1 => Repeat::None,
-                            _ => Repeat::Times(times - 1),
-                        };
-
-                        current_content = Some(CurrentContent::new(content, behavior))
-                    }
+                    ContentState::Incomplete => { /* do nothing */ }
                 }
             }
 
@@ -257,7 +240,6 @@ fn initial_buffer() -> Box<ScreenBuffer> {
         animation: prolite::api::Animation::None {
             duration: prolite::api::ContentDuration::Forever,
         },
-        repeat: prolite::api::Repeat::None,
     };
 
     let glyphs = glyphs::get_glyph_placement(&content.text, UnknownGlyphBehavior::Ignore);
