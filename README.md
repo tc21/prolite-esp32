@@ -12,9 +12,9 @@ hardware requirements:
 - a pro-lite m2014r display
 - power supply for the above things
 - the ability to solder or connect wires between your esp32 and the pro-lite display
-- understanding of the control (input) pin layout of your prolite display; see part 1.1  of (my writeup)[https://natsuai.com/personal/writeup-20241016/index.html] for details
+- understanding of the control (input) pin layout of your prolite display; see part 1.1  of [my writeup](https://natsuai.com/personal/writeup-20241016/index.html) for details
 
 
 why 2 boards?
 
-turns out a wifi server is too much for a puny esp32 to handle without taking a way too much core time from the driver thread. so we need to offload it to another esp32 so the display is crisp and without artifacts. the renderer also affects display quality but I figured it was better than sending 20-60 frame buffers over serial each second
+turns out a wifi server is too much for a puny esp32 to handle without taking away too much core time from the driver thread. so we need to offload it to another esp32 so the display is crisp and without artifacts. the renderer also affects display quality but I figured it was better than sending 20-60 frame buffers over serial each second
