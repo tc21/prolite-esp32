@@ -4,7 +4,7 @@ things you need to configure if you want to build this on your own:
 - `controller/.cargo/config.toml`: fill in WIFI_SSID and WIFI_PASSWORD
 - `controller/src/main.rs`: configure your uart pins
 - `driver/src/config.rs` and `driver/src/main.rs`: configure your uart and control (output) pins
-- look at `glyphs*.txt` and the `.py` files in `driver/`: you may want to add, update, or generate your own glyphs
+- look at `glyphs*.txt` and the `.py` files in `driver/`: you may want to add, update, or generate your own glyphs; then run the two generate_glyphs.py scripts
 
 
 hardware requirements:
