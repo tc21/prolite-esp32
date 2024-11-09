@@ -19,11 +19,12 @@ use esp_idf_svc::{
 use gpio::ControlPins;
 use log::info;
 use prolite::{
-    api::{Command, Content, ContentGroup},
+    api::{Animation, Color, Command, ContentDuration},
     ScreenBuffer,
 };
 use renderer::{
-    render_result::{ContentState, CurrentContent, ScreenBufferState},
+    current_content::{ContentGroupState, CurrentContent},
+    glyphs::get_glyph_placement,
     UnknownGlyphBehavior,
 };
 
@@ -148,23 +149,33 @@ fn initialize_renderer_thread(
         }
 
         if let Some(cc) = current_content.as_mut() {
-            let render = renderer::render(cc, now);
+            let should_render_current_frame;
+            let should_replace_current_content;
 
-            // todo move to better location
-            let mut content_stepped = false;
-
-            if render.content_state == ContentState::Complete {
-                match cc.step() {
-                    ContentState::Complete => {
-                        info!("[render] finished rendering previous content");
-                        current_content = None;
-                    }
-                    ContentState::Incomplete => content_stepped = true
+            let u = cc.update(now);
+            match u {
+                ContentGroupState::StepStarted => {
+                    should_render_current_frame = true;
+                    should_replace_current_content = false;
+                }
+                ContentGroupState::StepIncomplete => {
+                    should_render_current_frame = cc.is_animated();
+                    should_replace_current_content = false;
+                }
+                ContentGroupState::Finished => {
+                    should_render_current_frame = cc.is_animated();
+                    should_replace_current_content = true;
                 }
             }
 
-            if content_stepped || render.buffer_state != ScreenBufferState::NotUpdated {
-                send(&screen_buffer_tx, render.buffer);
+            if should_render_current_frame {
+                let rendered = cc.render(now);
+                send(&screen_buffer_tx, rendered);
+            }
+
+            if should_replace_current_content {
+                info!("[render] finished rendering previous content");
+                current_content = None;
             }
         }
 
@@ -230,19 +241,13 @@ fn read_next_command(
 }
 
 fn initial_buffer() -> Box<ScreenBuffer> {
-    let content_group = ContentGroup {
-        contents: vec![Content {
-            text: "booting...".to_string(),
-            color: prolite::api::Color::Orange,
-            animation: prolite::api::Animation::None {
-                duration: prolite::api::ContentDuration::Forever,
-            },
-        }],
-        repeat: prolite::api::Repeat::None,
+    let rendered_glyphs = get_glyph_placement("booting...", UnknownGlyphBehavior::Ignore);
+    let color = Color::Orange;
+    let animation = Animation::None {
+        duration: ContentDuration::Forever,
     };
-    let content = CurrentContent::new(content_group, UnknownGlyphBehavior::Ignore);
 
-    renderer::render(&content, Instant::now()).buffer
+    renderer::render(&rendered_glyphs, &color, &animation, None, Duration::ZERO)
 }
 
 fn send<T>(sender: &Sender<T>, value: T) {
