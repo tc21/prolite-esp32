@@ -19,7 +19,7 @@ use esp_idf_svc::{
 use gpio::ControlPins;
 use log::info;
 use prolite::{
-    api::{Animation, Color, Command, ContentDuration},
+    api::{Animation, Color, Command, Content, ContentDuration},
     ScreenBuffer,
 };
 use renderer::{
@@ -143,7 +143,6 @@ fn initialize_renderer_thread(
 
         if current_content.is_none() {
             if let Some(next_content) = content_queue.pop_front() {
-                info!("[render] starting render of content {:?}", &next_content);
                 current_content = Some(CurrentContent::new(next_content, behavior))
             }
         }
@@ -211,43 +210,38 @@ fn read_next_command(
 ) -> Result<serde_json::Result<Command>, String> {
     let mut command = vec![];
 
-    loop {
-        let mut remaining_read = uart_receiver.remaining_read().map_err(|e| e.to_string())?;
+    while !command.ends_with(&prolite::uart::TERMINATION_SEQUENCE) {
+        // wait a tiny while to see if more data is coming
+        thread::sleep(Duration::from_millis(20));
 
-        if remaining_read == 0 {
-            thread::sleep(Duration::from_secs(1));
-            continue;
-        }
-
-        while remaining_read > 0 {
-            let to_read = if remaining_read > 256 {
-                256
-            } else {
-                remaining_read
-            };
-            let mut buffer = vec![0; to_read];
-            uart_receiver
-                .read_exact(&mut buffer)
+        let bytes_to_read = uart_receiver.remaining_read().map_err(|e| e.to_string())?;
+        if bytes_to_read > 0 {
+            let mut buffer = vec![0; bytes_to_read];
+            uart_receiver.read_exact(&mut buffer)
                 .map_err(|e| e.to_string())?;
-            command.extend_from_slice(&buffer);
 
-            // wait a tiny while to see if more data is coming
-            thread::sleep(Duration::from_millis(20));
-            remaining_read = uart_receiver.remaining_read().map_err(|e| e.to_string())?;
+            command.extend_from_slice(&buffer);
         }
 
-        return Ok(serde_json::from_slice(&command));
     }
+
+    let content_size = command.len() - prolite::uart::TERMINATION_SEQUENCE.len();
+    return Ok(serde_json::from_slice(&command[..content_size]));
 }
 
 fn initial_buffer() -> Box<ScreenBuffer> {
-    let rendered_glyphs = get_glyph_placement("booting...", UnknownGlyphBehavior::Ignore);
-    let color = Color::Orange;
-    let animation = Animation::None {
-        duration: ContentDuration::Forever,
+    let content = Content {
+        text: "booting...".to_owned(),
+        color: Color::Orange,
+        animation: Animation::None {
+            duration: ContentDuration::Forever,
+        },
+        align: prolite::api::Alignment::Center,
     };
 
-    renderer::render(&rendered_glyphs, &color, &animation, None, Duration::ZERO)
+    let rendered_glyphs = get_glyph_placement(&content.text, UnknownGlyphBehavior::Ignore);
+
+    renderer::render(&content, &rendered_glyphs, None, Duration::ZERO)
 }
 
 fn send<T>(sender: &Sender<T>, value: T) {

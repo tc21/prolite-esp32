@@ -4,6 +4,7 @@ use std::{
 };
 
 pub mod api;
+pub mod uart;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pixel {

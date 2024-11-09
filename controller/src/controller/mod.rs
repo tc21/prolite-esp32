@@ -88,6 +88,11 @@ fn send_command(command: &Command, sender: &UartDriver<'static>) -> Result<(), S
         Err(e) => return Err(format!("could not send request: {:?}", e)),
     }
 
+    match sender.write(&prolite::uart::TERMINATION_SEQUENCE) {
+        Ok(_) => { /* do nothing */ }
+        Err(e) => return Err(format!("could not send request: {:?}", e)),
+    }
+
     Ok(())
 }
 
