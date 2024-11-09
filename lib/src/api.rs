@@ -78,16 +78,36 @@ impl Default for Color {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum Alignment {
-    Left,
+    Left {
+        #[serde(default)]
+        position: ScrollPosition,
+    },
     Center,
-    Right,
+    Right {
+        #[serde(default)]
+        position: ScrollPosition,
+    },
 }
 
 impl Default for Alignment {
     fn default() -> Self {
         Alignment::Center
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScrollPosition {
+    Beginning,
+    Center,
+    End,
+}
+
+impl Default for ScrollPosition {
+    fn default() -> Self {
+        ScrollPosition::Beginning
     }
 }
 
@@ -111,7 +131,7 @@ pub enum Animation {
         direction: SlideInBoundsDirection,
         #[serde(default)]
         speed: SlideSpeed,
-    }
+    },
 }
 
 impl Default for Animation {
