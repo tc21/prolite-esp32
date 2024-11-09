@@ -4,7 +4,7 @@ things you need to configure if you want to build this on your own:
 - `controller/.cargo/config.toml`: fill in WIFI_SSID and WIFI_PASSWORD
 - `controller/src/main.rs`: configure your uart pins
 - `driver/src/config.rs` and `driver/src/main.rs`: configure your uart and control (output) pins
-- look at `glyphs*.txt` and the `.py` files in `driver/`: you may want to add, update, or generate your own glyphs; then run the two generate_glyphs.py scripts
+- look at `glyphs*.txt` and the `.py` files in `driver/`: you may want to add, update, or generate your own glyphs; then run the two `generate_glyphs.py` scripts
 
 
 hardware requirements:
@@ -15,8 +15,13 @@ hardware requirements:
 - understanding of the control (input) pin layout of your prolite display; see part 1.1  of [my writeup](https://natsuai.com/personal/writeup-20241016/index.html) for details
 
 
-why 2 boards?
+### why 2 boards?
 
 turns out a wifi server is too much for a puny esp32 to handle without taking away too much core time from the driver thread. so we need to offload it to another esp32 so the display is crisp and without artifacts. the renderer also affects display quality but I figured it was better than sending 20-60 frame buffers over serial each second. 
 
 the wifi server just reads post requests and relays them as-is to the second board, so you can also just not have a wifi server and communicate with the driver board with uart instead.
+
+
+### what commands do I send it?
+
+just send anything that deserializes into the `Command` enum in [lib/src/api.rs](lib/src/api.rs#L9)
