@@ -13,9 +13,6 @@ mod animations;
 pub mod current_content;
 pub mod glyphs;
 
-// rust-analyzer wants this for some absurd reason
-mod current_Content;
-
 pub fn render(
     rendered_glyphs: &RenderedGlyphs,
     color: &Color,

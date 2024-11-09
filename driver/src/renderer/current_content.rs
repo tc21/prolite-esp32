@@ -41,11 +41,11 @@ impl CurrentContent {
         }
     }
 
-    pub fn update(&mut self, current_time: Instant) -> ContentGroupState {
+    pub fn update(&mut self, current_time: Instant) -> ContentState {
         if !self.initialized {
             self.initialize_step();
             self.initialized = true;
-            return ContentGroupState::StepStarted;
+            return ContentState::StepStarted;
         }
 
         if self.step_duration.is_some()
@@ -54,7 +54,7 @@ impl CurrentContent {
             return self.step();
         }
 
-        return ContentGroupState::StepIncomplete;
+        return ContentState::StepIncomplete;
     }
 
     pub fn is_animated(&self) -> bool {
@@ -75,26 +75,26 @@ impl CurrentContent {
         )
     }
 
-    fn step(&mut self) -> ContentGroupState {
+    fn step(&mut self) -> ContentState {
         if self.step + 1 < self.content_group.contents.len() {
             self.step += 1;
             self.initialize_step();
-            return ContentGroupState::StepStarted;
+            return ContentState::StepStarted;
         }
 
         match self.content_group.repeat {
-            Repeat::None | Repeat::Times(0) => ContentGroupState::Finished,
+            Repeat::None | Repeat::Times(0) => ContentState::Finished,
             Repeat::Times(n) => {
                 self.content_group.repeat = Repeat::Times(n - 1);
 
                 self.step = 0;
                 self.initialize_step();
-                ContentGroupState::StepStarted
+                ContentState::StepStarted
             }
             Repeat::Forever => {
                 self.step = 0;
                 self.initialize_step();
-                ContentGroupState::StepStarted
+                ContentState::StepStarted
             }
         }
     }
@@ -112,16 +112,10 @@ impl CurrentContent {
 }
 
 #[derive(Debug)]
-pub enum ContentGroupState {
+pub enum ContentState {
     StepStarted,
     StepIncomplete,
     Finished,
-}
-
-#[derive(Debug)]
-pub struct NewRenderResult {
-    pub new_buffer: Option<Box<ScreenBuffer>>,
-    pub content_state: ContentGroupState,
 }
 
 fn get_duration(content: &Content, rendered_width: usize) -> Option<Duration> {

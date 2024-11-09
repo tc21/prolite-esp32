@@ -23,7 +23,7 @@ use prolite::{
     ScreenBuffer,
 };
 use renderer::{
-    current_content::{ContentGroupState, CurrentContent},
+    current_content::{ContentState, CurrentContent},
     glyphs::get_glyph_placement,
     UnknownGlyphBehavior,
 };
@@ -154,15 +154,15 @@ fn initialize_renderer_thread(
 
             let u = cc.update(now);
             match u {
-                ContentGroupState::StepStarted => {
+                ContentState::StepStarted => {
                     should_render_current_frame = true;
                     should_replace_current_content = false;
                 }
-                ContentGroupState::StepIncomplete => {
+                ContentState::StepIncomplete => {
                     should_render_current_frame = cc.is_animated();
                     should_replace_current_content = false;
                 }
-                ContentGroupState::Finished => {
+                ContentState::Finished => {
                     should_render_current_frame = cc.is_animated();
                     should_replace_current_content = true;
                 }
