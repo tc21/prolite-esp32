@@ -21,14 +21,14 @@ fn get_glyph(c: char) -> Option<Glyph> {
     }
 }
 
-pub fn get_glyph_placement(text: &str, behavior: UnknownGlyphBehavior) -> PlacedGlyphs {
+pub fn get_glyph_placement(text: &str, behavior: UnknownGlyphBehavior) -> RenderedGlyphs {
     let mut width = 0;
     let mut glyphs = vec![];
 
     for c in text.chars() {
         match get_glyph(c) {
             Some(glyph) => {
-                glyphs.push(PlacedGlyph {
+                glyphs.push(RenderedGlyph {
                     glyph,
                     x_offset: width,
                 });
@@ -37,7 +37,7 @@ pub fn get_glyph_placement(text: &str, behavior: UnknownGlyphBehavior) -> Placed
             None => {
                 match behavior {
                     UnknownGlyphBehavior::ReplaceWithPlaceholder => {
-                        glyphs.push(PlacedGlyph {
+                        glyphs.push(RenderedGlyph {
                             glyph: PLACEHOLDER_GLYPH,
                             x_offset: width,
                         });
@@ -54,7 +54,7 @@ pub fn get_glyph_placement(text: &str, behavior: UnknownGlyphBehavior) -> Placed
 
     // remove the extra spaced added at the end
     width -= 1;
-    PlacedGlyphs { glyphs, width }
+    RenderedGlyphs { glyphs, width }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,13 +64,13 @@ pub enum UnknownGlyphBehavior {
 }
 
 #[derive(Debug)]
-pub struct PlacedGlyph {
+pub struct RenderedGlyph {
     pub glyph: Glyph,
     pub x_offset: usize,
 }
 
 #[derive(Debug)]
-pub struct PlacedGlyphs {
-    pub glyphs: Vec<PlacedGlyph>,
+pub struct RenderedGlyphs {
+    pub glyphs: Vec<RenderedGlyph>,
     pub width: usize,
 }

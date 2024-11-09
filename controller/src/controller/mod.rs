@@ -11,7 +11,7 @@ use esp_idf_svc::{
 };
 
 use log::info;
-use prolite::api::{Color, Command, Content, ContentDuration, Repeat};
+use prolite::api::{Color, Command, Content, ContentDuration, ContentGroup, Repeat};
 
 pub fn establish_control_server(
     sender: UartDriver<'static>,
@@ -22,12 +22,14 @@ pub fn establish_control_server(
 
     // if this fails we will just restart
     let startup_command = Command::ShowNow {
-        content: Content {
-            text: format!("IP: {}", ip_address),
-            color: Color::default(),
-            animation: prolite::api::Animation::None {
-                duration: ContentDuration::Forever,
-            },
+        content: ContentGroup {
+            contents: vec![Content {
+                text: format!("IP: {}", ip_address),
+                color: Color::default(),
+                animation: prolite::api::Animation::None {
+                    duration: ContentDuration::Forever,
+                },
+            }],
             repeat: Repeat::None,
         },
     };

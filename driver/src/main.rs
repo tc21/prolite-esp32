@@ -19,12 +19,12 @@ use esp_idf_svc::{
 use gpio::ControlPins;
 use log::info;
 use prolite::{
-    api::{Command, Content, Repeat},
+    api::{Animation, Color, Command, ContentDuration},
     ScreenBuffer,
 };
 use renderer::{
-    glyphs,
-    render_result::{ContentState, CurrentContent, ScreenBufferState},
+    current_content::{ContentGroupState, CurrentContent},
+    glyphs::get_glyph_placement,
     UnknownGlyphBehavior,
 };
 
@@ -47,8 +47,6 @@ fn main() {
     };
     // Enable WDT on the main task (this task).
     unsafe { sys::esp_task_wdt_add(sys::xTaskGetCurrentTaskHandle()) };
-
-    info!("{:?}", hal::cpu::core());
 
     let peripherals = hal::prelude::Peripherals::take().unwrap();
 
@@ -150,42 +148,34 @@ fn initialize_renderer_thread(
             }
         }
 
-        if let Some(CurrentContent {
-            content,
-            start_time,
-            rendered_glyphs,
-        }) = current_content.as_ref()
-        {
-            let render = renderer::render(content, *start_time, now, rendered_glyphs);
+        if let Some(cc) = current_content.as_mut() {
+            let should_render_current_frame;
+            let should_replace_current_content;
 
-            // todo move to better location
-            if render.content_state == ContentState::Complete {
-                match content.repeat {
-                    prolite::api::Repeat::None => {
-                        info!("[render] finished rendering previous content");
-                        current_content = None;
-                    }
-
-                    prolite::api::Repeat::Forever => {
-                        current_content = Some(CurrentContent::new(content.clone(), behavior))
-                    }
-
-                    prolite::api::Repeat::Times(times) => {
-                        let mut content = content.clone();
-                        content.repeat = match times {
-                            ..=1 => Repeat::None,
-                            _ => Repeat::Times(times - 1),
-                        };
-
-                        current_content = Some(CurrentContent::new(content, behavior))
-                    }
+            let u = cc.update(now);
+            match u {
+                ContentGroupState::StepStarted => {
+                    should_render_current_frame = true;
+                    should_replace_current_content = false;
+                }
+                ContentGroupState::StepIncomplete => {
+                    should_render_current_frame = cc.is_animated();
+                    should_replace_current_content = false;
+                }
+                ContentGroupState::Finished => {
+                    should_render_current_frame = cc.is_animated();
+                    should_replace_current_content = true;
                 }
             }
 
-            if render.buffer_state != ScreenBufferState::NotUpdated {
-                // info!("rendered: \n{}", &render.buffer);
+            if should_render_current_frame {
+                let rendered = cc.render(now);
+                send(&screen_buffer_tx, rendered);
+            }
 
-                send(&screen_buffer_tx, render.buffer);
+            if should_replace_current_content {
+                info!("[render] finished rendering previous content");
+                current_content = None;
             }
         }
 
@@ -242,7 +232,7 @@ fn read_next_command(
             command.extend_from_slice(&buffer);
 
             // wait a tiny while to see if more data is coming
-            thread::sleep(Duration::from_millis(1));
+            thread::sleep(Duration::from_millis(20));
             remaining_read = uart_receiver.remaining_read().map_err(|e| e.to_string())?;
         }
 
@@ -251,18 +241,13 @@ fn read_next_command(
 }
 
 fn initial_buffer() -> Box<ScreenBuffer> {
-    let content = Content {
-        text: "booting...".to_string(),
-        color: prolite::api::Color::Orange,
-        animation: prolite::api::Animation::None {
-            duration: prolite::api::ContentDuration::Forever,
-        },
-        repeat: prolite::api::Repeat::None,
+    let rendered_glyphs = get_glyph_placement("booting...", UnknownGlyphBehavior::Ignore);
+    let color = Color::Orange;
+    let animation = Animation::None {
+        duration: ContentDuration::Forever,
     };
 
-    let glyphs = glyphs::get_glyph_placement(&content.text, UnknownGlyphBehavior::Ignore);
-
-    renderer::render(&content, Instant::now(), Instant::now(), &glyphs).buffer
+    renderer::render(&rendered_glyphs, &color, &animation, None, Duration::ZERO)
 }
 
 fn send<T>(sender: &Sender<T>, value: T) {
