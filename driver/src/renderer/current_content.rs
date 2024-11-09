@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use prolite::{
     api::{
-        Animation, AnimationDirection, Content, ContentDuration, ContentGroup, Interval, Repeat,
+        Animation, Content, ContentDuration, ContentGroup, Repeat, SlideDirection, SlideSpeed,
         SlideType,
     },
     ScreenBuffer,
@@ -65,11 +65,9 @@ impl CurrentContent {
     }
 
     pub fn render(&self, current_time: Instant) -> Box<ScreenBuffer> {
-        let content = self.content();
         super::render(
+            self.content(),
             &self.rendered_glyphs,
-            &content.color,
-            &content.animation,
             self.step_duration,
             current_time - self.step_start_time,
         )
@@ -125,37 +123,47 @@ fn get_duration(content: &Content, rendered_width: usize) -> Option<Duration> {
             ContentDuration::Forever => None,
         },
         Animation::Slide {
-            interval,
+            speed,
             direction,
             slide_type,
         } => {
             let animated_length = match (slide_type, direction) {
                 (
                     SlideType::In | SlideType::Out,
-                    AnimationDirection::TopToBottom | AnimationDirection::BottomToTop,
+                    SlideDirection::TopToBottom | SlideDirection::BottomToTop,
                 ) => ScreenBuffer::HEIGHT,
                 (
                     SlideType::In | SlideType::Out,
-                    AnimationDirection::LeftToRight | AnimationDirection::RightToLeft,
+                    SlideDirection::LeftToRight | SlideDirection::RightToLeft,
                 ) => (ScreenBuffer::WIDTH + rendered_width) / 2,
-                (
-                    SlideType::InOut,
-                    AnimationDirection::TopToBottom | AnimationDirection::BottomToTop,
-                ) => 2 * ScreenBuffer::HEIGHT,
-                (
-                    SlideType::InOut,
-                    AnimationDirection::LeftToRight | AnimationDirection::RightToLeft,
-                ) => ScreenBuffer::WIDTH + rendered_width,
+                (SlideType::InOut, SlideDirection::TopToBottom | SlideDirection::BottomToTop) => {
+                    2 * ScreenBuffer::HEIGHT
+                }
+                (SlideType::InOut, SlideDirection::LeftToRight | SlideDirection::RightToLeft) => {
+                    ScreenBuffer::WIDTH + rendered_width
+                }
             };
 
-            Some(get_finite_animation_duration(&interval, animated_length))
+            Some(get_finite_animation_duration(&speed, animated_length))
+        }
+        Animation::SlideInBounds {
+            direction: _,
+            speed,
+        } => {
+            let animated_length = if rendered_width > ScreenBuffer::WIDTH {
+                rendered_width - ScreenBuffer::WIDTH
+            } else {
+                0
+            };
+
+            Some(get_finite_animation_duration(&speed, animated_length))
         }
     }
 }
 
-fn get_finite_animation_duration(interval: &Interval, animated_length: usize) -> Duration {
-    match interval {
-        Interval::Duration(duration) => *duration,
-        Interval::Dps(dps) => Duration::from_secs_f64((animated_length as f64) / (*dps as f64)),
+fn get_finite_animation_duration(speed: &SlideSpeed, animated_length: usize) -> Duration {
+    match speed {
+        SlideSpeed::Duration(duration) => *duration,
+        SlideSpeed::Dps(dps) => Duration::from_secs_f64((animated_length as f64) / (*dps as f64)),
     }
 }

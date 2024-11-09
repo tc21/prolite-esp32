@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use prolite::ScreenBuffer;
 
-use prolite::api::{Animation, AnimationDirection, SlideType};
+use prolite::api::{Alignment, Animation, SlideDirection, SlideInBoundsDirection, SlideType};
 
 #[derive(Debug)]
 pub struct Offset {
@@ -12,27 +12,12 @@ pub struct Offset {
 
 pub fn get_global_offset(
     animation: &Animation,
+    default_alignment: Alignment,
     rendered_width: usize,
     duration: Option<Duration>,
     time_elapsed: Duration,
 ) -> Offset {
-    let default_offset = {
-        let mut w = rendered_width as i32;
-        // Place items in center, prefer left side if cannot center:
-        // screen width = 8, width = 4 -> x = 2  W/2-w/2
-        // screen width = 8, width = 5 -> x = 1  W/2-(w+1)/2
-        // screen width = 7, width = 4 -> x = 1  W/2-w/2
-        // screen width = 7, width = 5 -> x = 1  W/2-w/2
-        let midpoint = (ScreenBuffer::WIDTH / 2) as i32;
-        if (midpoint & 1) ^ (w & 1) == 1 {
-            w += 1;
-        }
-
-        Offset {
-            x: midpoint - w / 2,
-            y: 0,
-        }
-    };
+    let default_offset = get_default_offset(default_alignment, rendered_width);
 
     match animation {
         Animation::None { .. } => default_offset,
@@ -64,10 +49,10 @@ pub fn get_global_offset(
             };
 
             let (altered_start_offset, altered_end_offset) = match direction {
-                AnimationDirection::TopToBottom => (top_position(), bottom_position()),
-                AnimationDirection::BottomToTop => (bottom_position(), top_position()),
-                AnimationDirection::LeftToRight => (left_position(), right_position()),
-                AnimationDirection::RightToLeft => (right_position(), left_position()),
+                SlideDirection::TopToBottom => (top_position(), bottom_position()),
+                SlideDirection::BottomToTop => (bottom_position(), top_position()),
+                SlideDirection::LeftToRight => (left_position(), right_position()),
+                SlideDirection::RightToLeft => (right_position(), left_position()),
             };
 
             let (start_offset, end_offset) = match slide_type {
@@ -76,11 +61,47 @@ pub fn get_global_offset(
                 SlideType::InOut => (altered_start_offset, altered_end_offset),
             };
 
-            let duration = duration.unwrap();
+            let duration = duration.unwrap_or_default();
+
+            get_offset_for_linear_movement(start_offset, end_offset, duration, time_elapsed)
+        }
+        Animation::SlideInBounds { direction, .. } => {
+            let left_aligned = get_default_offset(Alignment::Left, rendered_width);
+            let right_aligned = get_default_offset(Alignment::Right, rendered_width);
+
+            let (start_offset, end_offset) = match direction {
+                SlideInBoundsDirection::Forward => (left_aligned, right_aligned),
+                SlideInBoundsDirection::Reverse => (right_aligned, left_aligned),
+            };
+
+            let duration = duration.unwrap_or_default();
 
             get_offset_for_linear_movement(start_offset, end_offset, duration, time_elapsed)
         }
     }
+}
+
+pub fn get_default_offset(alignment: Alignment, rendered_width: usize) -> Offset {
+    let x = match alignment {
+        Alignment::Left => 0,
+        Alignment::Center => {
+            let mut w = rendered_width as i32;
+            // Place items in center, prefer left side if cannot center:
+            // screen width = 8, width = 4 -> x = 2  W/2-w/2
+            // screen width = 8, width = 5 -> x = 1  W/2-(w+1)/2
+            // screen width = 7, width = 4 -> x = 1  W/2-w/2
+            // screen width = 7, width = 5 -> x = 1  W/2-w/2
+            let midpoint = (ScreenBuffer::WIDTH / 2) as i32;
+            if (midpoint & 1) ^ (w & 1) == 1 {
+                w += 1;
+            }
+
+            midpoint - w / 2
+        }
+        Alignment::Right => ScreenBuffer::WIDTH as i32 - rendered_width as i32,
+    };
+
+    Offset { x, y: 0 }
 }
 
 fn get_offset_for_linear_movement(

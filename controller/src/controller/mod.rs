@@ -29,6 +29,7 @@ pub fn establish_control_server(
                 animation: prolite::api::Animation::None {
                     duration: ContentDuration::Forever,
                 },
+                align: prolite::api::Alignment::Center
             }],
             repeat: Repeat::None,
         },

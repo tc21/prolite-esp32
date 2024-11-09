@@ -26,6 +26,8 @@ pub struct Content {
     pub color: Color,
     #[serde(default)]
     pub animation: Animation,
+    #[serde(default)]
+    pub align: Alignment,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,6 +78,20 @@ impl Default for Color {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Alignment {
+    Left,
+    Center,
+    Right,
+}
+
+impl Default for Alignment {
+    fn default() -> Self {
+        Alignment::Center
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Animation {
     None {
@@ -86,10 +102,16 @@ pub enum Animation {
         #[serde(default)]
         slide_type: SlideType,
         #[serde(default)]
-        direction: AnimationDirection,
+        direction: SlideDirection,
         #[serde(default)]
-        interval: Interval,
+        speed: SlideSpeed,
     },
+    SlideInBounds {
+        #[serde(default)]
+        direction: SlideInBoundsDirection,
+        #[serde(default)]
+        speed: SlideSpeed,
+    }
 }
 
 impl Default for Animation {
@@ -116,30 +138,43 @@ impl Default for SlideType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum AnimationDirection {
+pub enum SlideDirection {
     TopToBottom,
     BottomToTop,
     LeftToRight,
     RightToLeft,
 }
 
-impl Default for AnimationDirection {
+impl Default for SlideDirection {
     fn default() -> Self {
-        AnimationDirection::RightToLeft
+        SlideDirection::RightToLeft
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SlideInBoundsDirection {
+    Forward,
+    Reverse,
+}
+
+impl Default for SlideInBoundsDirection {
+    fn default() -> Self {
+        SlideInBoundsDirection::Forward
     }
 }
 
 #[serde_as]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Interval {
+pub enum SlideSpeed {
     Duration(#[serde_as(as = "DurationSecondsWithFrac<f64>")] Duration),
     Dps(usize),
 }
 
-impl Default for Interval {
+impl Default for SlideSpeed {
     fn default() -> Self {
-        Interval::Dps(12)
+        SlideSpeed::Dps(12)
     }
 }
 
