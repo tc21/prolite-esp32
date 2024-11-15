@@ -39,7 +39,6 @@ pub fn establish_control_server(
 
     server.fn_handler(
         "/api/",
-        // TODO figure out how post works
         Method::Post,
         move |mut request| -> core::result::Result<(), EspIOError> {
             let response_content = match process_request(&mut request, &sender) {

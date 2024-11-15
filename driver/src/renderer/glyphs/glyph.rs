@@ -37,8 +37,6 @@ impl Glyph {
         let width = self.width();
         let mut data = self.data;
 
-        // info!("{}, {}, {}", data & 1, x, y);
-
         for row in (0..7).rev() {
             for col in (0..(width as i32)).rev() {
                 let x = x + col;

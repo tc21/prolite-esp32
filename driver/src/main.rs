@@ -86,9 +86,6 @@ fn main() {
         .stack_size(8 * 1024)
         .spawn(move || initialize_renderer_thread(command_rx, buffer_tx))
         .unwrap();
-    // thread::Builder::new()
-    // .stack_size(8 * 1024)
-    // .spawn(move || {
 
     let mut buffer = initial_buffer();
     loop {
@@ -106,8 +103,6 @@ fn main() {
             sys::esp_task_wdt_reset();
         }
     }
-
-    // }).unwrap();
 }
 
 fn initialize_renderer_thread(
@@ -257,7 +252,6 @@ fn try_recv<T>(receiver: &Receiver<T>) -> Option<T> {
         Err(TryRecvError::Disconnected) => {
             // todo restart threads, but for now just panic
             panic!("channel disconnected: {:?}", receiver)
-            // None
         }
     }
 }

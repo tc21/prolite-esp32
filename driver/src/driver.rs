@@ -20,9 +20,6 @@ pub fn display_screen(
         let (row_0_level, row_1_level, row_2_level) = CONTROL_SIGNALS_BY_ROW[row];
 
         control_pins.screen.set_high()?;
-        // control_pins.row_0.set_low();
-        // control_pins.row_1.set_low();
-        // control_pins.row_2.set_low();
 
         for col in 0..ScreenBuffer::WIDTH {
             let pixel = buffer.0[row][80 - col - 1];
